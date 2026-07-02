@@ -1,7 +1,7 @@
-import type { AwarenessState } from 'y-protocols/awareness';
+import type { Awareness } from "y-protocols/awareness";
 
 interface Props {
-  peers: Map<number, AwarenessState>;
+  peers: Map<number, any>;
 }
 
 export default function PresenceBar({ peers }: Props) {
