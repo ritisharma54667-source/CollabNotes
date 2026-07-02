@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as Y from 'yjs';
 import type { Awareness } from 'y-protocols/awareness';
-import type { AwarenessState } from 'y-protocols/awareness';
+
 
 interface Stroke {
   id: string;
@@ -10,12 +10,18 @@ interface Stroke {
   width: number;
 }
 
+interface PeerState {
+  user?: {
+    name: string;
+    color: string;
+  };
+}
+
 interface Props {
   doc: Y.Doc;
   awareness: Awareness;
-  peers: Map<number, AwarenessState>;
+  peers: Map<number, PeerState>;
 }
-
 export default function Whiteboard({ doc, awareness, peers }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
