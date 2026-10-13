@@ -1,29 +1,31 @@
-import { FormEvent, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { useState, type FormEvent } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 export default function LoginPage() {
   const { user, login, register } = useAuth();
-  const [isRegister, setIsRegister] = useState(false);
+  const location = useLocation();
+  const from = (location.state as { from?: string } | null)?.from ?? '/';
+  const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to={from} replace />;
 
-  const handleSubmit = async (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
+    setBusy(true);
     try {
-      if (isRegister) await register(email, password, name);
-      else await login(email, password);
+      if (mode === 'login') await login(email, password);
+      else await register(email, name, password);
     } catch (err) {
-      setError((err as Error).message);
+      setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   };
 
@@ -31,42 +33,44 @@ export default function LoginPage() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-brand">
-          <span className="brand-icon">◈</span>
+          <div className="brand-icon" aria-hidden>✦</div>
           <h1>CollabNotes</h1>
-          <p>Real-time team editing with WebSockets &amp; CRDT sync</p>
+          <p>Real-time notes, whiteboards and task boards</p>
         </div>
-
-        <form onSubmit={handleSubmit} className="auth-form">
-          {isRegister && (
+        <form className="auth-form" onSubmit={submit}>
+          {mode === 'register' && (
             <label>
               Name
-              <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Your name" />
+              <input value={name} onChange={(e) => setName(e.target.value)} required maxLength={60} autoComplete="name" />
             </label>
           )}
           <label>
             Email
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@team.com" />
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
           </label>
           <label>
             Password
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} placeholder="••••••••" />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={mode === 'register' ? 8 : undefined}
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+            />
           </label>
-          {error && <p className="error-msg">{error}</p>}
-          <button type="submit" disabled={loading} className="btn btn-primary btn-full">
-            {loading ? 'Please wait…' : isRegister ? 'Create account' : 'Sign in'}
+          {error && <p className="error-msg" role="alert">{error}</p>}
+          <button className="btn btn-primary btn-full" disabled={busy}>
+            {busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
           </button>
         </form>
-
         <p className="auth-toggle">
-          {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
-          <button type="button" className="link-btn" onClick={() => setIsRegister(!isRegister)}>
-            {isRegister ? 'Sign in' : 'Register'}
+          {mode === 'login' ? 'New here? ' : 'Already have an account? '}
+          <button className="link-btn" type="button" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}>
+            {mode === 'login' ? 'Create an account' : 'Sign in'}
           </button>
         </p>
-
-        <div className="auth-demo-hint">
-          <strong>Demo tip:</strong> Open the same document in two browser windows (or incognito) with different accounts to see live sync and conflict handling.
-        </div>
+        {mode === 'register' && <p className="auth-demo-hint">Use at least 8 characters. Open a document in two browser windows to see live collaboration.</p>}
       </div>
     </div>
   );

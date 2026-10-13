@@ -1,20 +1,17 @@
 import type { ConnectionStatus } from '../lib/collabProvider';
 
-interface Props {
-  status: ConnectionStatus;
-}
-
 const LABELS: Record<ConnectionStatus, string> = {
-  connecting: 'Connecting…',
   connected: 'Live',
-  disconnected: 'Reconnecting…',
+  connecting: 'Connecting…',
+  disconnected: 'Offline — changes are saved locally',
 };
 
-export default function SyncIndicator({ status }: Props) {
+export default function SyncIndicator({ status, synced }: { status: ConnectionStatus; synced: boolean }) {
+  const label = status === 'connected' && !synced ? 'Syncing…' : LABELS[status];
   return (
-    <span className={`sync-indicator sync-${status}`}>
+    <div className={`sync-indicator sync-${status}`} role="status" aria-live="polite">
       <span className="sync-dot" />
-      {LABELS[status]}
-    </span>
+      <span>{label}</span>
+    </div>
   );
 }

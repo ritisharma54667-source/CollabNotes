@@ -265,10 +265,9 @@ export class UndoManager extends ObservableV2 {
         this.emit('stack-item-updated', changeEvent)
       }
     }
+    this.destroy = this.destroy.bind(this)
     this.doc.on('afterTransaction', this.afterTransactionHandler)
-    this.doc.on('destroy', () => {
-      this.destroy()
-    })
+    this.doc.on('destroy', this.destroy)
   }
 
   /**
@@ -395,6 +394,7 @@ export class UndoManager extends ObservableV2 {
   destroy () {
     this.trackedOrigins.delete(this)
     this.doc.off('afterTransaction', this.afterTransactionHandler)
+    this.doc.off('destroy', this.destroy)
     super.destroy()
   }
 }

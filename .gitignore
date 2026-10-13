@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+# database dumps hold user data — never commit them
+*.sql.gz
+*.dump
+coverage/
+.DS_Store
+*.log

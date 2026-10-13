@@ -1,48 +1,66 @@
-import { useEffect, useState } from "react";
-import {
-  CollabProvider,
-  colorForName,
-  ConnectionStatus,
-} from "../lib/collabProvider";
-import { WS_BASE, getToken, getStoredUser } from "../lib/api";
+import { useEffect, useState } from 'react';
+import * as Y from 'yjs';
+import { IndexeddbPersistence } from 'y-indexeddb';
+import { api, type Role } from '../lib/api';
+import { CollabProvider, type ConnectionStatus, type PresenceUser } from '../lib/collabProvider';
+import { colorForName } from '../lib/colors';
 
-export function useCollab(documentId: string) {
-  const [provider, setProvider] = useState<CollabProvider | null>(null);
-  const [status, setStatus] = useState<ConnectionStatus>("connecting");
-  const [peers, setPeers] = useState<Map<number, Record<string, unknown>>>(
-    new Map()
-  );
+export interface CollabState {
+  doc: Y.Doc;
+  provider: CollabProvider;
+  status: ConnectionStatus;
+  synced: boolean;
+  /** Content is safe to show: either synced with the server or restored from the offline copy. */
+  ready: boolean;
+  presence: PresenceUser[];
+  role: Role | null;
+  fatalError: string | null;
+}
+
+interface Internal {
+  doc: Y.Doc;
+  provider: CollabProvider;
+}
+
+export function useCollab(documentId: string, userName: string, initialRole: Role | null): CollabState | null {
+  const [instance, setInstance] = useState<Internal | null>(null);
+  const [status, setStatus] = useState<ConnectionStatus>('connecting');
+  const [synced, setSynced] = useState(false);
+  const [localReady, setLocalReady] = useState(false);
+  const [presence, setPresence] = useState<PresenceUser[]>([]);
+  const [role, setRole] = useState<Role | null>(initialRole);
+  const [fatalError, setFatalError] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = getToken();
-    const user = getStoredUser();
+    const doc = new Y.Doc();
+    const local = new IndexeddbPersistence(`collab-notes:${documentId}`, doc);
+    void local.whenSynced.then(() => setLocalReady(true)).catch(() => setLocalReady(true));
 
-    if (!token || !user) return;
-
-    const p = new CollabProvider({
+    const provider = new CollabProvider(doc, {
       documentId,
-      token,
-      wsUrl: WS_BASE,
-      user: {
-        name: user.name,
-        color: colorForName(user.name),
-      },
-      onStatusChange: setStatus,
-      onPeersChange: setPeers,
+      user: { name: userName, color: colorForName(userName) },
+      getTicket: () => api.getWsTicket(documentId),
+      onStatus: setStatus,
+      onSynced: setSynced,
+      onPresence: setPresence,
+      onRole: setRole,
+      onFatal: setFatalError,
     });
-
-    setProvider(p);
+    setInstance({ doc, provider });
 
     return () => {
-      p.destroy();
+      provider.destroy();
+      void local.destroy();
+      doc.destroy();
+      setInstance(null);
+      setStatus('connecting');
+      setSynced(false);
+      setLocalReady(false);
+      setPresence([]);
+      setFatalError(null);
     };
-  }, [documentId]);
+  }, [documentId, userName]);
 
-  return {
-    provider,
-    doc: provider?.doc ?? null,
-    awareness: provider?.awareness ?? null,
-    status,
-    peers,
-  };
+  if (!instance) return null;
+  return { ...instance, status, synced, ready: synced || localReady, presence, role, fatalError };
 }

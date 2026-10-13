@@ -1,56 +1,76 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, api, clearAuth, getStoredUser, getToken, setAuth } from '../lib/api';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { api, tokenStore, type User } from '../lib/api';
 
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string) => Promise<void>;
+  register: (email: string, name: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/** Offline copies are removed on logout so the next person on a shared computer cannot read them. */
+async function clearLocalDocuments() {
+  try {
+    const dbs = (await indexedDB.databases?.()) ?? [];
+    await Promise.all(
+      dbs.filter((d) => d.name?.startsWith('collab-notes:')).map((d) => new Promise((r) => {
+        const req = indexedDB.deleteDatabase(d.name!);
+        req.onsuccess = req.onerror = req.onblocked = () => r(null);
+      }))
+    );
+  } catch {
+    /* best effort */
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(getStoredUser());
-  const [loading, setLoading] = useState(!!getToken());
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(() => tokenStore.get() !== null);
+
+  const logout = useCallback(() => {
+    tokenStore.clear();
+    setUser(null);
+    void clearLocalDocuments();
+  }, []);
 
   useEffect(() => {
-    if (!getToken()) {
-      setLoading(false);
-      return;
-    }
-    api.me()
-      .then((u: User) => setUser(u))
-      .catch(() => {
-        clearAuth();
-        setUser(null);
-      })
+    if (!tokenStore.get()) return;
+    api
+      .me()
+      .then((r) => setUser(r.user))
+      .catch(() => tokenStore.clear())
       .finally(() => setLoading(false));
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const { user, token } = await api.login(email, password);
-    setAuth(token, user);
-    setUser(user);
-  };
+  useEffect(() => {
+    const onExpired = () => logout();
+    window.addEventListener('auth:expired', onExpired);
+    return () => window.removeEventListener('auth:expired', onExpired);
+  }, [logout]);
 
-  const register = async (email: string, password: string, name: string) => {
-    const { user, token } = await api.register(email, password, name);
-    setAuth(token, user);
-    setUser(user);
-  };
-
-  const logout = () => {
-    clearAuth();
-    setUser(null);
-  };
-
-  return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user,
+      loading,
+      logout,
+      login: async (email, password) => {
+        const r = await api.login(email, password);
+        tokenStore.set(r.token);
+        setUser(r.user);
+      },
+      register: async (email, name, password) => {
+        const r = await api.register(email, name, password);
+        tokenStore.set(r.token);
+        setUser(r.user);
+      },
+    }),
+    [user, loading, logout]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

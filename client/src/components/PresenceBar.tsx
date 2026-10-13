@@ -1,27 +1,17 @@
-import type { Awareness } from "y-protocols/awareness";
+import type { PresenceUser } from '../lib/collabProvider';
+import { initials } from '../lib/colors';
 
-interface Props {
-  peers: Map<number, any>;
-}
-
-export default function PresenceBar({ peers }: Props) {
-  const users: { name: string; color: string }[] = [];
-  peers.forEach((state) => {
-    const user = state.user as { name: string; color: string } | undefined;
-    if (user) users.push(user);
-  });
-
-  // Deduplicate by name
-  const unique = users.filter((u, i, arr) => arr.findIndex((x) => x.name === u.name) === i);
-
+export default function PresenceBar({ users }: { users: PresenceUser[] }) {
+  const others = users.filter((u) => !u.isSelf);
+  if (others.length === 0) return <span className="presence-solo">Only you</span>;
   return (
-    <div className="presence-bar">
-      {unique.map((u) => (
-        <span key={u.name} className="presence-avatar" style={{ background: u.color }} title={u.name}>
-          {u.name.charAt(0).toUpperCase()}
+    <div className="presence-bar" aria-label={`${others.length} other ${others.length === 1 ? 'person' : 'people'} here`}>
+      {others.slice(0, 5).map((u) => (
+        <span key={u.clientId} className="presence-avatar" style={{ background: u.color }} title={u.name}>
+          {initials(u.name)}
         </span>
       ))}
-      {unique.length === 0 && <span className="presence-solo">Only you</span>}
+      {others.length > 5 && <span className="presence-solo">+{others.length - 5}</span>}
     </div>
   );
 }
